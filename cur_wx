@@ -1,0 +1,326 @@
+#!/bin/bash
+# pass wx cond and convert to speach
+# by n5tm
+# added onto by n8thn using ulaw on DIAL
+#
+# builds shortend and full wx report audio files
+# use /usr/local/bin/playWX (WXSTATION)
+#
+# Argument are offset by minus 1 as the first position command line variable is                                                                                         ZERO
+# add next line in place of TTS_PROGRAM in "getWxRPT_ug" script.
+# (cur_wx "$temp_f" "$wind_mph" "$wind_dir" "$precip_today_in" "$precip_1hr_in"                                                                                         "$wind_gust_mph" "$cur_pressure_in" "$humidity" "$windchill_f" "$heat_index_f")
+
+# set parameters used.
+
+runfile=/tmp/cur_wx_val.log
+STATION=$(/bin/cat /tmp/wx/wx_station.txt)
+Hindex=85  # Ignore Heat index if less than X.
+Wchill=25  # Ignore Wind chill if more than X.
+Gdiff=5    # Ignore Wind gust less than X mph more than Wind mph.
+Nrain=.05  # Ignore rainfall less than X
+args=("$@")
+SOUND_VAR_DIR=/var/lib/asterisk/sounds
+STATION_NAME_AUDIO=/var/lib/asterisk/sounds/wx/$STATION.ulaw # create you own st                                                                                        ation identifier and place in directory
+echo "Station audio file is $STATION_NAME_AUDIO"
+mkdir -p /tmp/wxtts
+ETC_DIR=/tmp/wxtts
+UG_WX_DIR=/tmp/wx/wxreport_ug/$STATION
+isneg="-"
+ echo "$(date +%Y-%m-%d.%H:%M:%S): $STATION values." >> $runfile
+ echo "Temp: ${args[0]} Wind: ${args[1]} Dir: ${args[2]} Rain: ${args[3]} Rain h                                                                                        r: ${args[4]} Gust: ${args[5]}" >> $runfile
+ echo "Barom:${args[6]} Humid: ${args[7]} Chill: ${args[8]} Heat: ${args[9]}" >>                                                                                         $runfile
+
+
+
+# parse each character into wx_value.ulaw audio file
+parseStr(){
+        string=$1
+        INT=${1%.*}
+        DEC=${1##*.}
+        digit="digit-"
+        unset chars
+        declare -a chars
+        while read -N 1
+        do
+                chars[${#chars[@]}]="$REPLY"
+        done <<<"$string"
+        unset chars[$((${#chars[@]} - 1))]
+#       echo "Array: ${chars[@]}"
+#       echo ${chars[@]}
+#       echo "Array length: ${#chars[@]}"
+        INT=${string%.*}
+        DEC=${string##*.}
+
+        if [ ${INT} -lt 20 ]; then
+                cat ${SOUND_VAR_DIR}/digits/${INT}.ulaw >> ${ETC_DIR}/wx_value.u                                                                                        law
+                if [[ $string == *"."* ]]; then
+                        if [ ${#DEC} -gt 1 ]; then
+                           cat ${SOUND_VAR_DIR}/point.ulaw ${SOUND_VAR_DIR}/digi                                                                                        ts/${DEC:0:1}.ulaw >>  ${ETC_DIR}/wx_value.ulaw
+                           cat ${SOUND_VAR_DIR}/digits/${DEC:1:1}.ulaw >>  ${ETC                                                                                        _DIR}/wx_value.ulaw
+                        else
+                           cat ${SOUND_VAR_DIR}/point.ulaw ${SOUND_VAR_DIR}/digi                                                                                        ts/${DEC}.ulaw >>  ${ETC_DIR}/wx_value.ulaw
+                        fi
+                fi
+
+        else
+           if [ ${INT} -lt 100 ]; then
+                if [ ${INT} -gt 20 ]; then
+                    DECADE=$((INT/10*10))
+                    MODULO=$((INT%10))
+                    cat ${SOUND_VAR_DIR}/digits/${DECADE}.ulaw >> ${ETC_DIR}/wx_                                                                                        value.ulaw
+                    if [ ${MODULO} != 0 ]; then
+                        cat ${SOUND_VAR_DIR}/digits/${MODULO}.ulaw >> ${ETC_DIR}                                                                                        /wx_value.ulaw
+                    fi
+                    if [[ $string == *"."* ]]; then
+
+#n8thn                  cat ${SOUND_VAR_DIR}/point.ulaw ${SOUND_VAR_DIR}/digits/                                                                                        ${DEC:1:1}.ulaw >>  ${ETC_DIR}/wx_value.ulaw
+                        cat ${SOUND_VAR_DIR}/point.ulaw ${SOUND_VAR_DIR}/digits/                                                                                        ${DEC:0:1}.ulaw >>  ${ETC_DIR}/wx_value.ulaw
+                    fi
+
+                else
+
+                    for ((i=0; i < ${#chars[@]}; i++));
+                        do
+                                echo "${digit} '${chars[i]}'"
+                                if [ "${chars[i]}" = "." ]; then
+                                        digit_file=${SOUND_VAR_DIR}/point.ulaw
+                                else
+                                        digit_file=${SOUND_VAR_DIR}/digits/${cha                                                                                        rs[i]}.ulaw
+
+                                fi
+                                echo $digit_file
+                                cat ${digit_file} >> ${ETC_DIR}/wx_value.ulaw
+                        done
+                fi
+            fi
+        fi
+
+}
+
+# main starts here
+# first arg is temperature
+# initialize wx_value.ulaw with "temperature is currently"
+echo number of Arguments: $#
+
+cat ${SOUND_VAR_DIR}/rpt/thetemperatureis.ulaw > ${ETC_DIR}/wx_value.ulaw
+echo Temp is: ${args[0]}
+parseStr ${args[0]}   # add temp digits
+cat ${SOUND_VAR_DIR}/degrees.ulaw >> ${ETC_DIR}/wx_value.ulaw    #add degrees to                                                                                         end
+cat ${ETC_DIR}/wx_value.ulaw > ${ETC_DIR}/cur_temp.ulaw    # copy to cur_temp.ul                                                                                        aw
+
+# next wind direction
+
+wind_dir=${args[2]}
+cat ${SOUND_VAR_DIR}/letters/at.ulaw > ${ETC_DIR}/wind_at.ulaw
+echo Winds from: $wind_dir
+case "${wind_dir}" in
+        'north') cat ${SOUND_VAR_DIR}/north.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC                                                                                        _DIR}/wind_dir.ulaw ;;
+        'north north east') cat ${SOUND_VAR_DIR}/north.ulaw ${SOUND_VAR_DIR}/wx/                                                                                        northeast.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw  ;;
+        'north east') cat ${SOUND_VAR_DIR}/wx/northeast.ulaw ${ETC_DIR}/wind_at.                                                                                        ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'east north east') cat ${SOUND_VAR_DIR}/east.ulaw ${SOUND_VAR_DIR}/wx/no                                                                                        rtheast.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'east') cat ${SOUND_VAR_DIR}/east.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_D                                                                                        IR}/wind_dir.ulaw ;;
+        'east south east') cat ${SOUND_VAR_DIR}/east.ulaw ${SOUND_VAR_DIR}/wx/so                                                                                        utheast.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'south east')  cat ${SOUND_VAR_DIR}/wx/southeast.ulaw ${ETC_DIR}/wind_at                                                                                        .ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'south south east') cat ${SOUND_VAR_DIR}/south.ulaw ${SOUND_VAR_DIR}/wx/                                                                                        southeast.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'south') cat ${SOUND_VAR_DIR}/south.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC                                                                                        _DIR}/wind_dir.ulaw ;;
+        'south south west') cat ${SOUND_VAR_DIR}/south.ulaw ${SOUND_VAR_DIR}/wx/                                                                                        southwest.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'south west')  cat ${SOUND_VAR_DIR}/wx/southwest.ulaw ${ETC_DIR}/wind_at                                                                                        .ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'west south west') cat ${SOUND_VAR_DIR}/west.ulaw ${SOUND_VAR_DIR}/wx/so                                                                                        uthwest.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'west') cat ${SOUND_VAR_DIR}/west.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_D                                                                                        IR}/wind_dir.ulaw ;;
+        'west north west') cat ${SOUND_VAR_DIR}/west.ulaw ${SOUND_VAR_DIR}/wx/no                                                                                        rthwest.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'north west') cat ${SOUND_VAR_DIR}/wx/northwest.ulaw ${ETC_DIR}/wind_at.                                                                                        ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+        'north north west') cat ${SOUND_VAR_DIR}/north.ulaw ${SOUND_VAR_DIR}/wx/                                                                                        northwest.ulaw ${ETC_DIR}/wind_at.ulaw > ${ETC_DIR}/wind_dir.ulaw ;;
+esac
+
+# initialize wx_value.ulaw with "winds.ulaw" + "from.ulaw"
+
+rm -f ${ETC_DIR}/wx_value.ulaw
+cat ${SOUND_VAR_DIR}/wx/winds.ulaw ${SOUND_VAR_DIR}/from.ulaw > ${ETC_DIR}/wind_                                                                                        from.ulaw
+cat ${ETC_DIR}/wind_from.ulaw ${ETC_DIR}/wind_dir.ulaw >> ${ETC_DIR}/wx_value.ul                                                                                        aw
+echo wind speed: ${args[1]}
+parseStr ${args[1]}   # add wind digits strip decimal fraction
+cat ${SOUND_VAR_DIR}/miles-per-hour.ulaw >> ${ETC_DIR}/wx_value.ulaw    #add mph                                                                                         to end
+cat ${ETC_DIR}/wx_value.ulaw > ${ETC_DIR}/cur_wind.ulaw    # copy to cur_wind.ul                                                                                        aw
+
+# add gusts if greater than "$Gdif" mph difference
+
+A=${args[5]%.*}
+B=${args[1]%.*}
+C=$((B+Gdiff))
+echo Wind gusts: ${args[5]}
+if [ ${A} -gt ${C} ]; then
+        cat ${SOUND_VAR_DIR}/wx/gusting-to.ulaw > ${ETC_DIR}/wx_value.ulaw
+        echo Its gusting so we tell them:
+        parseStr ${args[5]%.*}
+        cat ${ETC_DIR}/wx_value.ulaw >> ${ETC_DIR}/cur_wind.ulaw
+        cat ${SOUND_VAR_DIR}/miles-per-hour.ulaw >> ${ETC_DIR}/cur_wind.ulaw
+        else
+        echo Not gusting enough to care:
+fi
+
+# check rainfall
+rm -f ${ETC_DIR}/rain_today.ulaw
+echo rainfall today: ${args[3]}
+A=${args[3]##*.}
+#if [ "${args[3]}" -le "${Nrain}" ]; then
+#echo "Rain is null, ignoring"
+#else
+        if [[ ${args[3]##*.} -le ${Nrain##*.} ]]; then
+#       if [ "${args[3]}" = "0.00" ] || [ "$A" = "" ]; then # or if [ -z "${args                                                                                        [3]}" ]
+                echo "No rain today, ignoring it. ##############################                                                                                        ############"
+        else
+                cat ${SOUND_VAR_DIR}/rainfall.ulaw ${SOUND_VAR_DIR}/digits/today                                                                                        .ulaw > ${ETC_DIR}/wx_value.ulaw
+                parseStr ${args[3]}
+                cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/wx/inches.ulaw > $                                                                                        {ETC_DIR}/rain_today.ulaw
+        fi
+#fi
+
+
+# check rainfall last hour  args[4]
+rm -f ${ETC_DIR}/rain_hour.ulaw  # clears out old data
+echo rainfall last hour: ${args[4]}
+
+        if [[ ${args[4]##*.} -le ${Nrain##*.} ]]; then
+#       if [ "${args[4]}" = "0.00" ] || [ "$A" = "" ]; then # or if [ -z "${args                                                                                        [3]}" ]
+                echo "No Rain in past hour, ignoring it. #######################                                                                                        #############"
+        else
+                cat ${SOUND_VAR_DIR}/rainfall.ulaw ${SOUND_VAR_DIR}/digits/1.ulaw ${SOUND_VAR_DIR}/hours.ulaw > ${ETC_DIR}/wx_value.ulaw
+                parseStr ${args[4]}
+                cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/wx/inches.ulaw > ${ETC_DIR}/rain_hour.ulaw
+        fi
+
+# Barometric pressure portion
+
+cat ${SOUND_VAR_DIR}/wx/barometer.ulaw  ${SOUND_VAR_DIR}/pressure.ulaw  ${SOUND_VAR_DIR}/was.ulaw > ${ETC_DIR}/wx_value.ulaw
+p_trend=$(/bin/cat $UG_WX_DIR/pressuretrend.txt) # getting pressure trend for /usr/local/bin/trend script.
+echo "p_trend is $p_trend"
+        if [ "$p_trend" = "rising" ]; then
+                cat ${SOUND_VAR_DIR}/wx/rising.ulaw >> ${ETC_DIR}/wx_value.ulaw
+        else
+                if [ "$p_trend" = "falling" ]; then
+                cat ${SOUND_VAR_DIR}/wx/falling.ulaw >> ${ETC_DIR}/wx_value.ulaw
+                else
+                        if [ "$p_trend" = "steady" ]; then
+                        cat ${SOUND_VAR_DIR}/wx/steady.ulaw >> ${ETC_DIR}/wx_value.ulaw
+                        else
+                        echo "No trend data."
+                        fi
+                fi
+        fi
+
+        cat ${SOUND_VAR_DIR}/letters/at.ulaw >> ${ETC_DIR}/wx_value.ulaw
+        echo pressure to : ${args[6]}
+#       parseStr ${args[6]#.}
+        parseStr ${args[6]}
+        cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/wx/inches.ulaw > ${ETC_DIR}/pressure_today.ulaw
+
+# Humidity section Arg 8
+
+cat ${SOUND_VAR_DIR}/wx/humidity.ulaw ${SOUND_VAR_DIR}/was.ulaw ${SOUND_VAR_DIR}/letters/at.ulaw > ${ETC_DIR}/wx_value.ulaw
+echo Humidity is : ${args[7]}
+parseStr ${args[7]%.*}
+cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/percent.ulaw > ${ETC_DIR}/humid_today.ulaw
+
+# Wind Chill section Arg 9  Only reports wind chill if less than 27 degrees or negative
+
+rm -f ${ETC_DIR}/wind_chill.ulaw # get rid of old
+if [ "${args[8]}" = "null" ]; then  # check for null
+#  if [ -z "$String" ]
+        echo "Value of windchill IS null."      # wind chill is null. Inoring it.
+        else
+                echo "Value of wind chill not NULL. Checking if negative."
+        if [[ ${args[8]:0:1} == "-" ]] ; then
+                echo "Wind chill is negative......brrrr"
+                cat ${SOUND_VAR_DIR}/wx/wind-chill.ulaw ${SOUND_VAR_DIR}/was.ulaw  ${SOUND_VAR_DIR}/digits/at.ulaw ${SOUND_VAR_DIR}/negative.ulaw > ${ETC_DIR}/wx_value.ulaw
+                echo wind chill: ${args[8]#"-"}
+                parseStr ${args[8]#"-"}
+                cat  ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/degrees.ulaw > ${ETC_DIR}/wind_chill.ulaw
+        else
+                echo "Value of wind chill does not appear as NEGATIVE value"
+                echo "Checking if less than ${Wchill} degrees."
+        if [[ ${args[8]%.*} -lt ${Wchill} ]]; then  # check if wind chill less than 27 degrees
+                echo "Wind chill is less than ${Wchill} degrees."
+                cat ${SOUND_VAR_DIR}/wx/wind-chill.ulaw ${SOUND_VAR_DIR}/was.ulaw  ${SOUND_VAR_DIR}/digits/at.ulaw > ${ETC_DIR}/wx_value.ulaw
+                echo wind chill: ${args[8]}
+                parseStr ${args[8]}
+                cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/degrees.ulaw > ${ETC_DIR}/wind_chill.ulaw
+        else
+                echo "Wind chill not that bad. Ignoring it."
+        fi
+      fi
+    fi
+
+
+# Heat index section.
+
+rm -f ${ETC_DIR}/heat_index.ulaw # remove old file if exist
+if [[ ${args[9]%.*} -gt ${Hindex} ]]; then  # heat index greater than Hindex variable degrees
+        echo "Heat index is greater than ${Hindex}"
+        cat ${SOUND_VAR_DIR}/wx/heat-index.ulaw ${SOUND_VAR_DIR}/was.ulaw > ${ETC_DIR}/wx_value.ulaw
+        echo heat index: ${args[9]%.*}
+        parseStr ${args[9]%.*}
+        cat ${ETC_DIR}/wx_value.ulaw ${SOUND_VAR_DIR}/degrees.ulaw >> ${ETC_DIR}/heat_index.ulaw
+else
+        echo "Heat index less than ${Hindex} Ignoring it."
+fi
+# Build short WX to play during events
+
+cat ${SOUND_VAR_DIR}/weather.ulaw ${SOUND_VAR_DIR}/report.ulaw > ${ETC_DIR}/shortwx_rpt.ulaw
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/cur_temp.ulaw >> ${ETC_DIR}/shortwx_rpt.ulaw
+cat ${ETC_DIR}/cur_wind.ulaw >> ${ETC_DIR}/shortwx_rpt.ulaw
+cat ${ETC_DIR}/rain_today.ulaw >> ${ETC_DIR}/shortwx_rpt.ulaw
+cp ${ETC_DIR}/shortwx_rpt.ulaw /tmp/shortwx_rpt.ul
+sox -v 0.6 /tmp/shortwx_rpt.ul /tmp/short_sox_wx.ul compand 0.02,0.20 5:-60,-40,-10 -5 -90 0.1
+cp /tmp/short_sox_wx.ul /tmp/wx/wxreport_ug/$STATION/short_WxRpt_ug.ul
+rm -f ${ETC_DIR}/shortwx_rpt.ulaw
+rm -f /tmp/short_sox_wx.ul
+
+# Build entire audio report
+
+cat ${SOUND_VAR_DIR}/weather.ulaw  ${SOUND_VAR_DIR}/report.ulaw  ${SOUND_VAR_DIR}/digits/at.ulaw  ${SOUND_VAR_DIR}/weather-station.ulaw > ${ETC_DIR}/cur_WxRpt_ug.ulaw
+if [ -f ${STATION_NAME_AUDIO} ]; then
+cat $STATION_NAME_AUDIO >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+fi
+
+#cat /tmp/sunset/sunriseset.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/cur_temp.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+if [ -f ${ETC_DIR}/heat_index.ulaw ]; then # if heat_index audio was created, we include. If not...ignore it.
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/heat_index.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+fi
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/cur_wind.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+if [ -f ${ETC_DIR}/wind_chill.ulaw ]; then # if wind_chill audio was created, we include. If not...ignore it.
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/wind_chill.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+fi
+if [ -f ${ETC_DIR}/rain_today.ulaw ]; then
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/rain_today.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+fi
+if [ -f ${ETC_DIR}/rain_hour.ulaw ]; then
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/rain_hour.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+fi
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/humid_today.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/silence/1.ulaw ${ETC_DIR}/pressure_today.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+
+#tail of audio report
+cat ${SOUND_VAR_DIR}/silence/1.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/this.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/has-been.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/your.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/weather.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+cat ${SOUND_VAR_DIR}/report.ulaw >> ${ETC_DIR}/cur_WxRpt_ug.ulaw
+
+sleep 2
+cp ${ETC_DIR}/cur_WxRpt_ug.ulaw /tmp/cur_WxRpt_ug.ul
+sleep 2
+sox -v 0.6 /tmp/cur_WxRpt_ug.ul /tmp/sox_wx.ul compand 0.02,0.20 5:-60,-40,-10 -5 -90 0.1
+# failed  sox /tmp/cur_WxRpt_ug.ul /tmp/sox_wx.ul compand 0.3,1 6:−70,−60,−20 −5 −80 0.2
+
+# copy "sox" temp file to WX_STATION directory.
+cp /tmp/sox_wx.ul /tmp/wx/wxreport_ug/$STATION/cur_WxRpt_ug.ulaw
+# copy the raw audio temp file.
+#cp ${ETC_DIR}/cur_WxRpt_ug.ulaw /tmp/wx/wxreport_ug/$STATION/cur_WxRpt_ug.ulaw
+
+
+
+
+exit 0
