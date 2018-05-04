@@ -1,0 +1,25 @@
+#!/bin/bash
+#-----
+
+### add following to rpt.conf in [node_number] stanza ### just look for the line starting with connpgm=
+#
+#connpgm=/usr/local/bin/msg_on_connect
+#
+
+
+echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
+echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
+echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6168262976@vtext.com # verizon text message
+exit 0
+
+
+
+# settings in /etc/ssmtp/ssmtp.conf without the # of course
+
+#FromLineOverride=YES
+#root=YOUR_EMAIL_NAME@gmail.com
+#hostname=DOMAIN.COM
+#mailhub=smtp.gmail.com:587
+#AuthUser=YOUR_EMAIL_NAME@gmail.com
+#AuthPass=YOUR_EMAIL_PASSWORD
+#useSTARTTLS=YES
