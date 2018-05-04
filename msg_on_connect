@@ -9,7 +9,7 @@
 
 echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
 echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
-echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6168262976@vtext.com # verizon text message
+echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
 exit 0
 
 
