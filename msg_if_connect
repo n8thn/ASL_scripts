@@ -1,0 +1,36 @@
+#!/bin/bash
+#-----
+
+### use chmod 755 msg_if_connect
+#
+### add following to rpt.conf in [node_number] stanza ### just look for the line starting with connpgm=
+# 
+#connpgm=/usr/local/bin/msg_if_connect
+#
+# enter YOUR NODE NUMBER for variable YOUR_NODE=
+# add node numbers you wish to be notified when they connect to your node separated by a space
+#
+YOUR_NODE=1999
+nodelist=(2000 2001 2002 2003)
+
+if [ "$1" = "$YOUR_NODE" ]; then
+        for N in ${nodelist[@]}
+        do
+        if [ "$2" = "$N" ]; then
+        echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
+        #echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
+        #echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
+        fi
+        done
+fi
+exit 0
+
+# settings in /etc/ssmtp/ssmtp.conf without the # of course
+
+#FromLineOverride=YES
+#root=YOUR_EMAIL_NAME@gmail.com
+#hostname=DOMAIN.COM
+#mailhub=smtp.gmail.com:587
+#AuthUser=YOUR_EMAIL_NAME@gmail.com
+#AuthPass=YOUR_EMAIL_PASSWORD
+#useSTARTTLS=YES
