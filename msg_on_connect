@@ -12,7 +12,7 @@ echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My
 echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
 exit 0
 
-
+# once your script is created make the connect script executable: chmod 755 /path/to/the/script"
 
 # settings in /etc/ssmtp/ssmtp.conf without the # of course
 
