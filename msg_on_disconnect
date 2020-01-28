@@ -1,0 +1,24 @@
+!/bin/bash
+#-----
+
+### add following to rpt.conf in [node_number] stanza ### just look for the line starting with discpgm=
+#
+#discpgm=/usr/local/bin/msg_on_disconnect
+#
+
+
+echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
+echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
+exit 0
+
+
+
+# settings in /etc/ssmtp/ssmtp.conf without the # of course
+
+#FromLineOverride=YES
+#root=YOUR_EMAIL_NAME@gmail.com
+#hostname=DOMAIN.COM
+#mailhub=smtp.gmail.com:587
+#AuthUser=YOUR_EMAIL_NAME@gmail.com
+#AuthPass=YOUR_EMAIL_PASSWORD
+#useSTARTTLS=YES
