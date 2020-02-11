@@ -6,6 +6,8 @@
 #discpgm=/usr/local/bin/msg_on_disconnect
 #
 
+# uncomment the following line for HAMVOIP if you use smlogger but also want this script
+#/usr/local/sbin/supermon/smlogger 0 $*
 
 echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
 echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
