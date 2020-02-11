@@ -6,6 +6,8 @@
 #connpgm=/usr/local/bin/msg_on_connect
 #
 
+# uncomment the following line for HAMVOIP if you use smlogger but also want this script
+#/usr/local/sbin/supermon/smlogger 1 $*
 
 echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
 echo "Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
