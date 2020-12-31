@@ -1,2 +1,2 @@
-# ASL_scripts
-Scripts for AllStarLink
+# extra goody scripts
+Scripts for use with asterisk, allstar, allstarlink
