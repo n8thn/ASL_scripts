@@ -1,0 +1,197 @@
+#!/bin/bash
+# by n8thn
+# build date August 2, 2017
+# revised January 2018  update to prevent band_nodes from writing to rpt_extnodes-temp at the same time as rc.updatenodeslist
+# cleaned layout 20190311
+##################################
+#
+# run this script with option ' install ' once then it will monitor the rpt_extnodes files for changes and continue to ban node list
+#
+#################################
+#
+# must be in /usr/local/sbin ###################
+# this script will add /etc/asterisk/bannednodes.conf.
+# it will also add itself as a service dependant on the rc.updatenodelist program
+# each time rc.updatenodeslist runs, it will update with IP addresses
+# previous IP's of nodes will be removed from the IPTABLES
+# and then blocked with the NEW IP of the nodes if  BLOCKIP="yes"
+# it will then remove the list of banned nodes from the /tmp/rpt_extnodes-temp and /var/lib/asterisk/rpt_extnodes files
+# preventing both inbound and outbound connections to those nodes
+#
+#  by default BLOCKIP is set to "no"  must have iptables installed and configured.
+# BLOCKIP may provide additional protection from unwanted guest.
+
+ BLOCKIP="no"  #yes OR no
+ logging="no" #yes OR no
+#
+#  Do not modify variables below.
+#
+#######################################################################
+ runfile=/tmp/ban_nodes.log
+ sourcefile=/tmp/rpt_extnodes-temp
+ conffile=/etc/asterisk/bannodes.conf
+ servicefile=/lib/systemd/system/ban_nodes.service
+ mkdir -p /tmp
+ rm -f /tmp/nodeIPtoban.tmp
+ rm -f /tmp/nodestoban
+
+if [ "$1" = "install" ]; then
+        echo "Creating $conffile for you to edit"
+	sleep 2
+        echo "#!/bin/bash" > $conffile
+        echo "#add nodes on each new line starting with the FOURTH line of the file" >> $conffile
+        echo "#must contain at least one node. can be a false node like 1998." >> $conffile
+        echo "1998" >> $conffile
+        echo "1999" >> $conffile
+        echo ""
+        echo ""
+
+#cat $conffile
+sleep 2
+# add to /lib/systemd/system  to run as service on startup
+        echo "Creating system file  ban_nodes.service  for you."
+sleep 2
+        echo "#/usr/lib/systemd/system/ban_nodes.service" > $servicefile
+        echo "[Unit]" >> $servicefile
+        echo "Description=AllStar Ban Nodes updater" >> $servicefile
+        echo "Wants=network.target" >> $servicefile
+        echo "After=network-online.target" >> $servicefile
+        echo "BindsTo=updatenodelist.service" >> $servicefile
+        echo "" >> $servicefile
+        echo "[Service]" >> $servicefile
+        echo "Type=simple" >> $servicefile
+        echo "StandardOutput=null" >> $servicefile
+        echo "ExecStart=/usr/local/sbin/ban_nodes &" >> $servicefile
+        echo "ExecStop=/usr/bin/killall -9 ban_nodes" >> $servicefile
+        echo "" >> $servicefile
+        echo "# safe_emulation" >> $servicefile
+        echo "Restart=always" >> $servicefile
+        echo "RestartSec=10" >> $servicefile
+        echo "[Install]" >> $servicefile
+        echo "WantedBy=multi-user.target" >> $servicefile
+# enable service
+        chmod 644 $servicefile
+        systemctl daemon-reload
+        systemctl enable ban_nodes.service
+        sleep 2
+        service ban_nodes start
+sleep 2
+        echo "Please edit the $conffile "
+        echo ""
+        echo "this installed as a service and will run at boot. Use service ban_nodes stop/start if needed."
+        echo "use  ps -aux  to see if service is running."
+        echo "start the ban_nodes service with --  service ban_nodes start  --"
+########
+        echo "Please edit the $conffile " >> $runfile
+        echo "" >> $runfile
+        echo "this installed as a service and will run at boot. Use service ban_nodes stop/start if needed." >> $runfile
+        echo "use  ps -aux  to see if service is running." >> $runfile
+        echo "start the ban_nodes service with --  service ban_nodes start  --" >> $runfile
+        exit 0
+fi
+if [ ! -f $conffile ]; then
+        echo "the $conffile file does not exits. Please use ban_nodes install  option.....Exiting."
+        echo "the $conffile file does not exits. Please use ban_nodes install  option.....Exiting." >> $runfile
+        exit 1
+fi
+
+# wait for rc.updatenodelist script to first populate rpt_extnodes-temp file
+while [ ! -f /tmp/rpt_extnodes-temp ]; do
+        echo "rpt_extnodes-temp does not exist yet. sleep 60"
+        sleep 60
+done
+### Set initial time of file
+LTIME=`stat -c %Z /tmp/rpt_extnodes-temp`
+# begin continual loop.
+while true; do
+	ATIME=`stat -c %Z /tmp/rpt_extnodes-temp`
+
+	if [[ "$ATIME" != "$LTIME" ]]
+	then
+	        echo "rpt_extnodes-temp was modified"
+	        echo ".......Block IP's is set to $BLOCKIP"
+	        echo ""
+###################################################################################################
+	        echo "Checking if updatenodeslist is done writing file"
+	        FILE=/tmp/rpt_extnodes-temp
+
+        while [ -n "$(lsof "$FILE")" ]
+        do
+	          echo "file in use, sleeping"
+	          sleep 1
+        done
+        echo "updatenodeslist is done writing /tmp/ext_nodeslist-temp"
+###################################################################################################
+        if [ $BLOCKIP = "yes" ]; then
+                if [ -f /tmp/nodeIPtoban ]; then
+                        echo "Flushing iptables rules for chain ban-nodes"
+                        iptables -F ban-nodes
+                        iptables -X ban-nodes
+                        sleep 1
+                        rm -f /tmp/nodeIPtoban
+                        tail -n +4 $conffile > /tmp/nodestoban
+                        # reemove blank lines from file /tmp/nodestoban
+                        sed -i "/^ *$/d" /tmp/nodestoban
+                        touch /tmp/nodeIPtoban.tmp
+                fi
+        while read nodenumber; do
+	        grep "$nodenumber" "$sourcefile" | grep -Eo "([0-9]{1,3}\.){3}[0-9]{1,3}" | uniq >> /tmp/nodeIPtoban.tmp
+	        sleep .25
+	        echo "$nodenumber IP added to nodeIPtoban.tmp file"
+        done < /tmp/nodestoban
+        # if no IP's to ban. skip.
+        filesize=$(wc -c < /tmp/nodeIPtoban.tmp)
+        minfilesize=8
+                if [ $filesize -ge $minfilesize ]; then
+	                echo "removing any duplicate IP's from /tmp/nodeIPtoban.tmp to ban"
+	                sort -u /tmp/nodeIPtoban.tmp > /tmp/nodeIPtoban
+	                sleep 1
+	                echo ".......Adding chain ban-nodes to iptables"
+	                iptables -N ban-nodes
+	                echo ".......Adding the nodes to ban IP's to the iptables"
+	                # remove blank lines from file /tmp/nodeIPtoban
+	                sed -i "/^ *$/d" /tmp/nodeIPtoban
+	                while read IP; do
+	                        iptables -A ban-nodes -s $IP -j DROP
+	                        echo "adding $IP to iptables banned"
+	                done < /tmp/nodeIPtoban
+                        if [ "$logging" = "yes" ]; then
+	                        echo "For history of IP addresses banned view the $runfile file"
+	                        echo "$(date +%Y-%m-%d.%H:%M:%S):List of node IP addresses banned on this pass" >> $runfile
+	                        cat /tmp/nodeIPtoban >> $runfile
+                        fi
+                echo "All Done"
+                else
+	                echo "No IP's to ban"
+                fi
+                #clean up a bit
+                rm -f /tmp/nodeIPtoban.tmp
+        fi
+
+        # read bannednodes.conf file for what we need and clean any blank lines.
+        tail -n +4 $conffile > /tmp/nodestoban
+        sed -i "/^ *$/d" /tmp/nodestoban
+        # removes banned node numbers from BOTH rpt_extnode files
+        while read nodenumber; do
+	        echo "removing $nodenumber if exist from $sourcefile"
+	        /bin/sed -i "/$nodenumber/d" /tmp/rpt_extnodes-temp
+        done < /tmp/nodestoban
+        cp /tmp/rpt_extnodes-temp /var/lib/asterisk/rpt_extnodes
+	if [ "$logging" = "yes" ]; then
+		echo "For history of NODES banned view the $runfile file"
+		echo "$(date +%Y-%m-%d.%H:%M:%S):List of NODES banned on this pass" >> $runfile
+		cat /tmp/nodestoban >> $runfile
+        fi
+# reset LTIME variable
+LTIME=`stat -c %Z /tmp/rpt_extnodes-temp`
+
+else
+	echo "No change yet. Sleeping for 15"
+	sleep 15
+fi
+# keep it clean. sed can be messy sometimes.....
+rm -f /tmp/sed*
+done  #uncomment after testing
+
+echo "Script errored out of loop. Something really screwy happened." >> $runfile
+exit 0
