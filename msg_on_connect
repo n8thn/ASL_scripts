@@ -15,7 +15,8 @@
 #HamVOIP
 ASTDB="/var/log/asterisk/astdb.txt"
 
-#Callsign lookup from astdb.txt if the script is not running correctly comment this out
+# Callsign lookup from astdb.txt if the script is not running correctly comment this out
+# credit David KB4FXC
 CALL=$(awk '-F|' '$1 ~ /^'$2'$/ {print $2}' < $ASTDB)
 
 echo "Callsign: $CALL Node $2 connected to node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
