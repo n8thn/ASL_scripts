@@ -6,11 +6,31 @@
 #discpgm=/usr/local/bin/msg_on_disconnect
 #
 
-# uncomment the following line for HAMVOIP if you use smlogger but also want this script
+# uncomment the following line if you use Supermon and want to use smlogger
 #/usr/local/sbin/supermon/smlogger 0 $*
 
+#Pick one of the following and verify the astdb.txt file exist
+#ASL with Supermon Installed
+#ASTDB="/var/www/html/supermon/astdb.txt"
+#HamVOIP
+ASTDB="/var/log/asterisk/astdb.txt"
+
+#Callsign lookup from astdb.txt if the script is not running correctly comment this out
+CALL=$(awk '-F|' '$1 ~ /^'$2'$/ {print $2}' < $ASTDB)
+
+echo "Callsign: $CALL Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" john.doe@aol.com # enter valid email address
 echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@messaging.sprintpcs.com  #sprint text message
 echo "Node $2 disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S):" | mail -s "My repeater" 6165551212@vtext.com # verizon text message
+
+#if you want to use Telegram
+#ref: https://blog.bj13.us/2016/09/06/how-to-send-yourself-a-telegram-message-from-bash.html
+
+#curl -s "https://api.telegram.org/bot$API_KEY/sendMessage?chat_id=$CHAT_ID&text=$CALL ($2) disconnected from node $1 at $(date +%Y-%m-%d.%H:%M:%S)"
+
+#Make sure to replace the variables:
+# $API_KEY = the access token from Step 1 in the website
+# $CHAT_ID = the chat id from step 2 in the website
+#I couldn't get it to work as variables so i had to put the key and Id in the curl line
 exit 0
 
 
